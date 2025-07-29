@@ -34,7 +34,7 @@ Aplicación desarrollada con Spring Boot utilizando Java 17. Se utiliza la libre
 - Se descarga la versión 5.1.0 del servidor GlassFish desde el sitio oficial de Eclipse:   [https://www.eclipse.org/downloads/download.php?file=/glassfish/glassfish-5.1.0.zip]
 
 
-![Glassfish source](docs/1-glassfish-source.jpg)
+![Glassfish source](docs/1-glassfish-source.jpg)  
 
 - En Apache NetBeans IDE 12, se inicia la configuración del servidor GlassFish desde el panel de servicios.
 
