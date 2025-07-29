@@ -2,64 +2,52 @@
 HELP.md
 
 # Carpetas de compilación general
-target/
-build/
-!**/src/main/**/target/
-!**/src/test/**/target/
-!**/src/main/**/build/
-!**/src/test/**/build/
+**/target/
+**/build/
 
 # Archivos de entorno
 .env
 .env.*
-/microservicio-productos/.env
-/microservicio-productos/.env.*
-/microservicio-inventario/.env
-/microservicio-inventario/.env.*
+**/.env
+**/.env.*
 
 # Maven Wrapper
-!.mvn/wrapper/maven-wrapper.jar
-
-# Directorios target específicos de cada microservicio
-/microservicio-productos/target/
-/microservicio-inventario/target/
-/microservicio-productos/build/
-/microservicio-inventario/build/
+.mvn/wrapper/maven-wrapper.jar
 
 # STS (Spring Tool Suite)
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
+**/.apt_generated/
+**/.classpath
+**/.factorypath
+**/.project
+**/.settings/
+**/.springBeans
+**/.sts4-cache/
 
 # IntelliJ IDEA
-.idea/
-*.iws
-*.iml
-*.ipr
+**/.idea/
+**/*.iws
+**/*.iml
+**/*.ipr
 
 # NetBeans
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
+**/nbproject/private/
+**/nbbuild/
+**/dist/
+**/nbdist/
+**/.nb-gradle/
 
 # VS Code
-.vscode/
+**/.vscode/
 
 # Archivos comunes a proyectos Java
-*.class
-*.log
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
-hs_err_pid*
-replay_pid*
+**/*.class
+**/*.log
+**/*.jar
+**/*.war
+**/*.nar
+**/*.ear
+**/*.zip
+**/*.tar.gz
+**/*.rar
+**/hs_err_pid*
+**/replay_pid*
