@@ -1,3 +1,14 @@
 spring:
   application:
     name: invoice-generator
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:invoice_generator}
+    username: ${DB_USER:invoice}
+    password: ${DB_PASSWORD:invoice}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
