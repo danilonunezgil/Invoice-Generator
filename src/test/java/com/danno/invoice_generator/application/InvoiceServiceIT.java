@@ -57,6 +57,20 @@ class InvoiceServiceIT extends PostgresIntegrationTest {
     }
 
     @Test
+    void given_draftInvoice_when_addLineItem_then_lineItemIsPersistedWithGeneratedId() {
+        Customer customer = persistCustomer("ES");
+        Invoice invoice = invoiceService.createDraft(customer.getId(), LocalDate.now().plusDays(30));
+
+        LineItem lineItem = invoiceService.addLineItem(
+                invoice.getId(), "Consulting", BigDecimal.ONE, new BigDecimal("100.00"));
+        // Force the flush a real (non-test-wrapped) transaction commit would trigger, so the
+        // cascade-persisted LineItem's generated id is assigned before we assert on it.
+        entityManager.flush();
+
+        assertThat(lineItem.getId()).isNotNull();
+    }
+
+    @Test
     void given_customerWithNoMatchingTaxRule_when_addLineItem_then_lineItemUsesDefaultRate() {
         Customer customer = persistCustomer("ZZ");
         Invoice invoice = invoiceService.createDraft(customer.getId(), LocalDate.now().plusDays(30));

@@ -48,9 +48,7 @@ public class InvoiceService {
     public LineItem addLineItem(UUID invoiceId, String description, BigDecimal quantity, BigDecimal unitPrice) {
         Invoice invoice = getInvoiceOrThrow(invoiceId);
         BigDecimal taxRate = resolveTaxRate(invoice.getCustomer());
-        LineItem lineItem = invoice.addLineItem(description, quantity, unitPrice, taxRate);
-        invoiceRepository.save(invoice);
-        return lineItem;
+        return invoice.addLineItem(description, quantity, unitPrice, taxRate);
     }
 
     @Transactional
@@ -59,21 +57,21 @@ public class InvoiceService {
         int fiscalYear = LocalDate.now().getYear();
         InvoiceNumber number = invoiceNumberGenerator.nextNumber(fiscalYear);
         invoice.issue(number);
-        return invoiceRepository.save(invoice);
+        return invoice;
     }
 
     @Transactional
     public Invoice markAsPaid(UUID invoiceId) {
         Invoice invoice = getInvoiceOrThrow(invoiceId);
         invoice.markAsPaid();
-        return invoiceRepository.save(invoice);
+        return invoice;
     }
 
     @Transactional
     public Invoice cancelInvoice(UUID invoiceId) {
         Invoice invoice = getInvoiceOrThrow(invoiceId);
         invoice.cancel();
-        return invoiceRepository.save(invoice);
+        return invoice;
     }
 
     @Transactional(readOnly = true)
@@ -82,8 +80,13 @@ public class InvoiceService {
     }
 
     private Invoice getInvoiceOrThrow(UUID invoiceId) {
-        return invoiceRepository.findById(invoiceId)
+        Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+        // Force the lazy lineItems collection to load while the transaction (and Hibernate
+        // session) is still open, since callers outside application/ (e.g. api/'s DTO mapping)
+        // run after this transaction has committed and open-in-view is disabled.
+        invoice.getLineItems().size();
+        return invoice;
     }
 
     private BigDecimal resolveTaxRate(Customer customer) {
