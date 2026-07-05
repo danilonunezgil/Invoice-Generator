@@ -2,6 +2,7 @@ package com.danno.invoice_generator.application;
 
 import com.danno.invoice_generator.application.port.CustomerRepository;
 import com.danno.invoice_generator.application.port.InvoiceNumberGenerator;
+import com.danno.invoice_generator.application.port.InvoicePdfGenerator;
 import com.danno.invoice_generator.application.port.InvoiceRepository;
 import com.danno.invoice_generator.application.port.TaxRuleRepository;
 import com.danno.invoice_generator.domain.Customer;
@@ -10,6 +11,7 @@ import com.danno.invoice_generator.domain.InvoiceNumber;
 import com.danno.invoice_generator.domain.LineItem;
 import com.danno.invoice_generator.domain.TaxRule;
 import com.danno.invoice_generator.domain.exception.CustomerNotFoundException;
+import com.danno.invoice_generator.domain.exception.InvalidInvoiceStateException;
 import com.danno.invoice_generator.domain.exception.InvoiceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,15 +27,18 @@ public class InvoiceService {
     private final CustomerRepository customerRepository;
     private final TaxRuleRepository taxRuleRepository;
     private final InvoiceNumberGenerator invoiceNumberGenerator;
+    private final InvoicePdfGenerator invoicePdfGenerator;
 
     public InvoiceService(InvoiceRepository invoiceRepository,
                            CustomerRepository customerRepository,
                            TaxRuleRepository taxRuleRepository,
-                           InvoiceNumberGenerator invoiceNumberGenerator) {
+                           InvoiceNumberGenerator invoiceNumberGenerator,
+                           InvoicePdfGenerator invoicePdfGenerator) {
         this.invoiceRepository = invoiceRepository;
         this.customerRepository = customerRepository;
         this.taxRuleRepository = taxRuleRepository;
         this.invoiceNumberGenerator = invoiceNumberGenerator;
+        this.invoicePdfGenerator = invoicePdfGenerator;
     }
 
     @Transactional
@@ -77,6 +82,15 @@ public class InvoiceService {
     @Transactional(readOnly = true)
     public Invoice findById(UUID invoiceId) {
         return getInvoiceOrThrow(invoiceId);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] generatePdf(UUID invoiceId) {
+        Invoice invoice = getInvoiceOrThrow(invoiceId);
+        if (invoice.getNumber() == null) {
+            throw new InvalidInvoiceStateException(invoiceId, invoice.getStatus(), "generatePdf");
+        }
+        return invoicePdfGenerator.generate(invoice);
     }
 
     private Invoice getInvoiceOrThrow(UUID invoiceId) {

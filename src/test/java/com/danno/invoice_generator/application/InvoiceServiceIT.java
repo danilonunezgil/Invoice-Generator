@@ -150,6 +150,28 @@ class InvoiceServiceIT extends PostgresIntegrationTest {
                 .isInstanceOf(InvalidInvoiceStateException.class);
     }
 
+    @Test
+    void given_issuedInvoice_when_generatePdf_then_returnsPdfBytes() {
+        Customer customer = persistCustomer("ES");
+        Invoice invoice = invoiceService.createDraft(customer.getId(), LocalDate.now().plusDays(30));
+        invoiceService.addLineItem(invoice.getId(), "Consulting", BigDecimal.ONE, new BigDecimal("100.00"));
+        invoiceService.issueInvoice(invoice.getId());
+
+        byte[] pdf = invoiceService.generatePdf(invoice.getId());
+
+        assertThat(pdf).isNotEmpty();
+        assertThat(new String(pdf, 0, 4)).isEqualTo("%PDF");
+    }
+
+    @Test
+    void given_draftInvoice_when_generatePdf_then_throwsInvalidInvoiceStateException() {
+        Customer customer = persistCustomer("ES");
+        Invoice invoice = invoiceService.createDraft(customer.getId(), LocalDate.now().plusDays(30));
+
+        assertThatThrownBy(() -> invoiceService.generatePdf(invoice.getId()))
+                .isInstanceOf(InvalidInvoiceStateException.class);
+    }
+
     private Customer persistCustomer(String regionCode) {
         Customer customer = new Customer("Acme", "TAX-1", "billing@acme.test", regionCode,
                 new Address("Main St 1", "City", "00000", "Country"));

@@ -6,7 +6,10 @@ import com.danno.invoice_generator.api.dto.InvoiceResponse;
 import com.danno.invoice_generator.api.dto.LineItemResponse;
 import com.danno.invoice_generator.application.InvoiceService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -58,5 +61,14 @@ public class InvoiceController {
     @GetMapping("/{invoiceId}")
     public InvoiceResponse findById(@PathVariable UUID invoiceId) {
         return InvoiceResponse.from(invoiceService.findById(invoiceId));
+    }
+
+    @GetMapping(value = "/{invoiceId}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> downloadPdf(@PathVariable UUID invoiceId) {
+        byte[] pdf = invoiceService.generatePdf(invoiceId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"invoice-" + invoiceId + ".pdf\"")
+                .body(pdf);
     }
 }
