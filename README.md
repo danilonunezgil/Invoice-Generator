@@ -15,6 +15,7 @@ Servicio de facturación construido con Spring Boot 3.5.16 y Java 17. Expone una
 7. [Cómo correr el proyecto](#cómo-correr-el-proyecto)
 8. [Testing](#testing)
 9. [Configuración de Claude Code en este repo](#configuración-de-claude-code-en-este-repo)
+10. [Guía de caso de uso completo](docs/guia-caso-de-uso.md)
 
 ---
 
