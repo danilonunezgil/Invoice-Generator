@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="invoice" pageWidth="595" pageHeight="842" columnWidth="515"
+              leftMargin="40" rightMargin="40" topMargin="40" bottomMargin="40">
+
+    <parameter name="invoiceNumber" class="java.lang.String"/>
+    <parameter name="statusLabel" class="java.lang.String"/>
+    <parameter name="issueDate" class="java.lang.String"/>
+    <parameter name="dueDate" class="java.lang.String"/>
+    <parameter name="customerName" class="java.lang.String"/>
+    <parameter name="customerTaxId" class="java.lang.String"/>
+    <parameter name="customerEmail" class="java.lang.String"/>
+    <parameter name="customerAddress" class="java.lang.String"/>
+    <parameter name="subtotal" class="java.math.BigDecimal"/>
+    <parameter name="taxTotal" class="java.math.BigDecimal"/>
+    <parameter name="total" class="java.math.BigDecimal"/>
+    <parameter name="lineItems" class="java.util.List"/>
+    <parameter name="SUB_LINE_ITEMS" class="net.sf.jasperreports.engine.JasperReport"/>
+
+    <title>
+        <band height="150">
+            <staticText>
+                <reportElement x="0" y="0" width="300" height="30"/>
+                <textElement>
+                    <font size="18" isBold="true"/>
+                </textElement>
+                <text><![CDATA[FACTURA]]></text>
+            </staticText>
+
+            <textField>
+                <reportElement x="0" y="35" width="250" height="16"/>
+                <textElement>
+                    <font isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{invoiceNumber}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="0" y="51" width="250" height="16"/>
+                <textFieldExpression><![CDATA["Estado: " + $P{statusLabel}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="0" y="67" width="250" height="16"/>
+                <textFieldExpression><![CDATA["Fecha de emisión: " + $P{issueDate}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="0" y="83" width="250" height="16"/>
+                <textFieldExpression><![CDATA["Fecha de vencimiento: " + $P{dueDate}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="300" y="35" width="215" height="16"/>
+                <textElement>
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Cliente]]></text>
+            </staticText>
+            <textField isStretchWithOverflow="true">
+                <reportElement x="300" y="51" width="215" height="16"/>
+                <textFieldExpression><![CDATA[$P{customerName}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="300" y="67" width="215" height="16"/>
+                <textFieldExpression><![CDATA["NIF/CIF: " + $P{customerTaxId}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="300" y="83" width="215" height="16"/>
+                <textFieldExpression><![CDATA[$P{customerEmail}]]></textFieldExpression>
+            </textField>
+            <textField isStretchWithOverflow="true">
+                <reportElement x="300" y="99" width="215" height="32"/>
+                <textFieldExpression><![CDATA[$P{customerAddress}]]></textFieldExpression>
+            </textField>
+
+            <line>
+                <reportElement x="0" y="140" width="515" height="1"/>
+            </line>
+        </band>
+    </title>
+
+    <detail>
+        <band height="220">
+            <subreport>
+                <reportElement x="0" y="0" width="515" height="220"/>
+                <dataSourceExpression><![CDATA[new net.sf.jasperreports.engine.data.JRBeanCollectionDataSource($P{lineItems})]]></dataSourceExpression>
+                <subreportExpression class="net.sf.jasperreports.engine.JasperReport"><![CDATA[$P{SUB_LINE_ITEMS}]]></subreportExpression>
+            </subreport>
+        </band>
+    </detail>
+
+    <summary>
+        <band height="80">
+            <line>
+                <reportElement x="315" y="0" width="200" height="1"/>
+            </line>
+            <staticText>
+                <reportElement x="315" y="6" width="100" height="16"/>
+                <text><![CDATA[Subtotal:]]></text>
+            </staticText>
+            <textField pattern="#,##0.00">
+                <reportElement x="415" y="6" width="100" height="16"/>
+                <textElement textAlignment="Right"/>
+                <textFieldExpression><![CDATA[$P{subtotal}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement x="315" y="24" width="100" height="16"/>
+                <text><![CDATA[IVA:]]></text>
+            </staticText>
+            <textField pattern="#,##0.00">
+                <reportElement x="415" y="24" width="100" height="16"/>
+                <textElement textAlignment="Right"/>
+                <textFieldExpression><![CDATA[$P{taxTotal}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement x="315" y="46" width="100" height="20"/>
+                <textElement>
+                    <font size="12" isBold="true"/>
+                </textElement>
+                <text><![CDATA[TOTAL:]]></text>
+            </staticText>
+            <textField pattern="#,##0.00">
+                <reportElement x="415" y="46" width="100" height="20"/>
+                <textElement textAlignment="Right">
+                    <font size="12" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{total}]]></textFieldExpression>
+            </textField>
+        </band>
+    </summary>
+</jasperReport>
