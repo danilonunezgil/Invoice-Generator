@@ -1,5 +1,7 @@
 ---
-paths: ["**/reports/**", "**/*.jrxml"]
+paths:
+  - **/reports/**
+  - **/*.jrxml
 ---
 # Convenciones JasperReports
 - Las plantillas .jrxml se compilan en build time, no en runtime (usa el maven-jasperreports-plugin)

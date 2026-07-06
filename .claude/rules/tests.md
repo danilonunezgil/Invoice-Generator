@@ -1,5 +1,7 @@
 ---
-paths: ["**/*Test.java", "**/*IT.java"]
+paths:
+  - **/*Test.java
+  - **/*IT.java
 ---
 # Convenciones de tests
 - Nombrar tests con patrón given_when_then

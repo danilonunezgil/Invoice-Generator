@@ -1,5 +1,6 @@
 ---
-paths: ["**/domain/**"]
+paths:
+  - **/domain/**
 ---
 # Convenciones de entidades
 - Usar @Version para optimistic locking en Invoice
