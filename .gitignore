@@ -1,6 +1,11 @@
 # Archivos de ayuda
 HELP.md
 
+# Material de referencia confidencial (guías internas, no publicar)
+# Se ignora todo el contenido excepto el README que documenta qué debe reponerse aquí
+docs/reference/*
+!docs/reference/README.md
+
 # Carpetas de compilación general
 **/target/
 **/build/
