@@ -2,9 +2,12 @@
 HELP.md
 
 # Material de referencia confidencial (guías internas, no publicar)
-# Se ignora todo el contenido excepto el README que documenta qué debe reponerse aquí
+# Se ignora todo el contenido excepto el README y la carpeta public/ (basada
+# en documentación pública de Anthropic, sin restricciones de copyright)
 docs/reference/*
 !docs/reference/README.md
+!docs/reference/public/
+!docs/reference/public/**
 
 # Carpetas de compilación general
 **/target/
