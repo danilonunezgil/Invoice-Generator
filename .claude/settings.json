@@ -15,6 +15,15 @@
             "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/protect-applied-migrations.py\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/protect-confidential-reference.py\""
+          }
+        ]
       }
     ]
   }
