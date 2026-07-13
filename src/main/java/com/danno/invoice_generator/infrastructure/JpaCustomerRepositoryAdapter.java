@@ -20,4 +20,9 @@ class JpaCustomerRepositoryAdapter implements CustomerRepository {
     public Optional<Customer> findById(UUID id) {
         return jpaRepository.findById(id);
     }
+
+    @Override
+    public long count() {
+        return jpaRepository.count();
+    }
 }

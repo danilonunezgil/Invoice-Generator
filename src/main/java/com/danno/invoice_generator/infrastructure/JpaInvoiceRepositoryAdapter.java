@@ -2,12 +2,15 @@ package com.danno.invoice_generator.infrastructure;
 
 import com.danno.invoice_generator.application.port.InvoiceRepository;
 import com.danno.invoice_generator.domain.Invoice;
+import com.danno.invoice_generator.domain.InvoiceStatus;
 import com.danno.invoice_generator.domain.exception.DuplicateInvoiceNumberException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Repository
 class JpaInvoiceRepositoryAdapter implements InvoiceRepository {
@@ -31,5 +34,13 @@ class JpaInvoiceRepositoryAdapter implements InvoiceRepository {
     @Override
     public Optional<Invoice> findById(UUID id) {
         return jpaRepository.findById(id);
+    }
+
+    @Override
+    public Map<InvoiceStatus, Long> countGroupedByStatus() {
+        return jpaRepository.countGroupedByStatus().stream()
+                .collect(Collectors.toMap(
+                        InvoiceJpaRepository.StatusCountProjection::getStatus,
+                        InvoiceJpaRepository.StatusCountProjection::getTotal));
     }
 }

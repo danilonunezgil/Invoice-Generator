@@ -8,4 +8,6 @@ import java.util.UUID;
 public interface CustomerRepository {
 
     Optional<Customer> findById(UUID id);
+
+    long count();
 }

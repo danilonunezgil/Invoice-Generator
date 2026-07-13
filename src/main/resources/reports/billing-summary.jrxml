@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="billing-summary" pageWidth="595" pageHeight="842" columnWidth="515"
+              leftMargin="40" rightMargin="40" topMargin="40" bottomMargin="40">
+
+    <parameter name="totalCustomers" class="java.lang.Long"/>
+    <parameter name="totalInvoices" class="java.lang.Long"/>
+    <parameter name="statusBreakdown" class="java.util.List"/>
+    <parameter name="SUB_STATUS_BREAKDOWN" class="net.sf.jasperreports.engine.JasperReport"/>
+
+    <title>
+        <band height="100">
+            <staticText>
+                <reportElement x="0" y="0" width="300" height="30"/>
+                <textElement>
+                    <font size="18" isBold="true"/>
+                </textElement>
+                <text><![CDATA[RESUMEN DE FACTURACIÓN]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="0" y="40" width="150" height="16"/>
+                <text><![CDATA[Clientes:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="150" y="40" width="100" height="16"/>
+                <textFieldExpression><![CDATA[$P{totalCustomers}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement x="0" y="56" width="150" height="16"/>
+                <text><![CDATA[Facturas (total):]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="150" y="56" width="100" height="16"/>
+                <textFieldExpression><![CDATA[$P{totalInvoices}]]></textFieldExpression>
+            </textField>
+            <line>
+                <reportElement x="0" y="90" width="515" height="1"/>
+            </line>
+        </band>
+    </title>
+
+    <detail>
+        <band height="140">
+            <subreport>
+                <reportElement x="0" y="0" width="515" height="140"/>
+                <dataSourceExpression><![CDATA[new net.sf.jasperreports.engine.data.JRBeanCollectionDataSource($P{statusBreakdown})]]></dataSourceExpression>
+                <subreportExpression class="net.sf.jasperreports.engine.JasperReport"><![CDATA[$P{SUB_STATUS_BREAKDOWN}]]></subreportExpression>
+            </subreport>
+        </band>
+    </detail>
+
+</jasperReport>
