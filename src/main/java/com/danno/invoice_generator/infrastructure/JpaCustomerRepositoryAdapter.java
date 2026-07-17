@@ -17,6 +17,11 @@ class JpaCustomerRepositoryAdapter implements CustomerRepository {
     }
 
     @Override
+    public Customer save(Customer customer) {
+        return jpaRepository.save(customer);
+    }
+
+    @Override
     public Optional<Customer> findById(UUID id) {
         return jpaRepository.findById(id);
     }
