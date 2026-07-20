@@ -14,8 +14,9 @@ Servicio de facturación construido con Spring Boot 3.5.16 y Java 17. Expone una
 6. [API REST](#api-rest)
 7. [Cómo correr el proyecto](#cómo-correr-el-proyecto)
 8. [Testing](#testing)
-9. [Configuración de Claude Code en este repo](#configuración-de-claude-code-en-este-repo)
-10. [Guía de caso de uso completo](docs/guia-caso-de-uso.md)
+9. [CI/CD: revisión automática de PRs con Claude Code](#cicd-revisión-automática-de-prs-con-claude-code)
+10. [Configuración de Claude Code en este repo](#configuración-de-claude-code-en-este-repo)
+11. [Guía de caso de uso completo](docs/guia-caso-de-uso.md)
 
 ---
 
@@ -158,6 +159,29 @@ La app queda en `http://localhost:8080`. No hay endpoint para crear `customers` 
 - Tests unitarios: sufijo `Test.java` (ej. `InvoiceControllerTest`).
 - Tests de integración: sufijo `IT.java` (ej. `InvoiceServiceIT`, `JpaInvoiceNumberGeneratorIT`), corridos por Failsafe en el profile `integration`. Nunca mockean el repositorio — usan Postgres real vía Testcontainers.
 - Patrón de nombres: `given_when_then`.
+
+---
+
+## CI/CD: revisión automática de PRs con Claude Code
+
+`.github/workflows/claude-review.yml` corre el CLI de Claude Code (`claude -p`) sobre cada Pull Request para detectar bugs y problemas de seguridad antes del merge, comentando directamente sobre las líneas del diff.
+
+**Trigger:** `pull_request` (`opened`, `synchronize`, `reopened`). No corre en push directo a `main`.
+
+**Pasos del job `review`:**
+
+1. Checkout del head del PR (`fetch-depth: 0`, necesario para diffear contra la rama base).
+2. Instala el CLI (`npm install -g @anthropic-ai/claude-code`).
+3. Calcula el diff del PR contra la rama base, limitado a archivos `.java`.
+4. Arma un prompt de revisión y lo corre con `claude -p --output-format json --json-schema .github/claude-review-schema.json`. El schema fuerza cada hallazgo a `{file, line, severity: "bug"|"security"|"style", description}`.
+5. Filtra con `jq` para quedarse solo con `severity: bug` o `security` — el estilo se detecta pero se descarta, para reducir ruido.
+6. Publica cada hallazgo como comentario inline en el PR vía `actions/github-script` (`pulls.createReviewComment`).
+
+**Seguridad:** el step que corre `claude -p` usa `--allowedTools "Read,Grep,Glob"` — sin `Bash`, `Write` ni `Edit`. El contenido de un PR es potencialmente no confiable (podría incluir un intento de prompt injection en el diff), así que el agente corre en modo solo-lectura.
+
+**Contexto de proyecto:** como el CLI corre dentro del repo ya checkouteado, carga automáticamente `.claude/CLAUDE.md` y las reglas scoped de `.claude/rules/` (ver [sección siguiente](#configuración-de-claude-code-en-este-repo)) — el prompt del workflow no necesita repetir las convenciones de dominio, Claude ya las conoce por el contexto del propio repo.
+
+**La API key:** el workflow usa el secret de repo `ANTHROPIC_API_KEY` (Settings → Secrets and variables → Actions), inyectado como variable de entorno solo en el step que invoca `claude`. Nunca está hardcodeada en el YAML. Es una API key de **console.anthropic.com** (facturación pay-as-you-go por token) — un plan **Claude Pro** de claude.ai no cubre este uso, son productos de facturación separada. `GITHUB_TOKEN` (usado para postear los comentarios) lo provee GitHub automáticamente por job, sin configuración manual.
 
 ---
 
