@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Ruta del archivo relativa a la raíz del repo, tal como aparece en el diff"
+          },
+          "line": {
+            "type": "integer",
+            "description": "Número de línea en la versión nueva (RIGHT side) del archivo"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["bug", "security", "style"]
+          },
+          "description": {
+            "type": "string",
+            "description": "Explicación concisa del hallazgo y por qué es un problema"
+          }
+        },
+        "required": ["file", "line", "severity", "description"]
+      }
+    }
+  },
+  "required": ["findings"]
+}

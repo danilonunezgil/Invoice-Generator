@@ -1,0 +1,120 @@
+name: Claude PR Review
+
+# Se dispara en cada PR (al abrirla, al agregar commits, o al reabrirla).
+# No corre en push directo a main.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# Mínimo permiso necesario: leer el código y poder escribir comentarios en el PR.
+permissions:
+  contents: read
+  pull-requests: write
+
+# Si llega un nuevo push mientras un review anterior de la MISMA PR sigue corriendo,
+# cancela el anterior — evita comentarios duplicados/obsoletos y ahorra costo de API.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0 # necesitamos el historial completo para poder diffear contra la rama base
+
+      - name: Instalar Claude Code CLI
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install -g @anthropic-ai/claude-code
+
+      - name: Calcular diff del PR (solo .java)
+        id: diff
+        run: |
+          git fetch origin "${{ github.event.pull_request.base.ref }}"
+          git diff "origin/${{ github.event.pull_request.base.ref }}" HEAD -- '*.java' > pr.diff
+          if [ -s pr.diff ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No hay cambios en archivos .java, se omite el review."
+          fi
+
+      - name: Armar prompt de revisión
+        if: steps.diff.outputs.has_changes == 'true'
+        run: |
+          {
+            echo "Sos un revisor de código para un Pull Request de un proyecto Java/Spring Boot (arquitectura hexagonal: domain/application/infrastructure/api)."
+            echo ""
+            echo "Reportá EXCLUSIVAMENTE:"
+            echo "- bug: errores de lógica, null pointers, condiciones de carrera, manejo de excepciones incorrecto, violaciones de las reglas de negocio del dominio (numeración de facturas, inmutabilidad de facturas PAID, cálculo de IVA, uso de BigDecimal vs double, IDs UUID, optimistic locking con @Version)."
+            echo "- security: inyección, secretos hardcodeados, validación de entrada faltante, exposición de entidades JPA en DTOs, cualquier otro riesgo de seguridad real."
+            echo ""
+            echo "Si detectás algo que sea solo de estilo/formato/naming, igual podés reportarlo con severity \"style\" - se filtra después, no lo omitas por tu cuenta."
+            echo "Si no encontrás nada, devolvé findings como lista vacía. No inventes hallazgos para tener algo que reportar."
+            echo ""
+            echo "Para cada hallazgo: file = ruta tal como aparece en el diff, line = número de línea en la versión NUEVA del archivo (columna derecha del diff)."
+            echo ""
+            echo "Podés usar las herramientas de lectura disponibles para leer archivos completos del repo si el diff solo no te da suficiente contexto (por ejemplo, para ver la clase completa de una entidad)."
+            echo ""
+            echo "--- DIFF DEL PR ---"
+            cat pr.diff
+          } > review-prompt.md
+
+      - name: Correr Claude Code review
+        if: steps.diff.outputs.has_changes == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cat review-prompt.md | claude -p \
+            --output-format json \
+            --json-schema "$(cat .github/claude-review-schema.json)" \
+            --allowedTools "Read,Grep,Glob" \
+            > result.json
+
+      - name: Filtrar solo bug y security
+        if: steps.diff.outputs.has_changes == 'true'
+        run: |
+          jq '{findings: [.structured_output.findings[] | select(.severity == "bug" or .severity == "security")]}' \
+            result.json > findings.json
+          echo "Hallazgos a comentar:"
+          cat findings.json
+
+      - name: Publicar comentarios inline en el PR
+        if: steps.diff.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { findings } = JSON.parse(fs.readFileSync('findings.json', 'utf8'));
+            const pr = context.payload.pull_request;
+
+            if (findings.length === 0) {
+              core.info('Claude no encontró bugs ni problemas de seguridad en este PR.');
+              return;
+            }
+
+            for (const finding of findings) {
+              try {
+                await github.rest.pulls.createReviewComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pr.number,
+                  commit_id: pr.head.sha,
+                  path: finding.file,
+                  line: finding.line,
+                  side: 'RIGHT',
+                  body: `**[${finding.severity}]** ${finding.description}`,
+                });
+              } catch (err) {
+                // La línea puede no formar parte del diff visible en GitHub (ej. contexto no
+                // modificado); en ese caso la API rechaza el comentario inline. Se loguea y
+                // se sigue con el resto en vez de abortar el job entero.
+                core.warning(`No se pudo comentar en ${finding.file}:${finding.line} — ${err.message}`);
+              }
+            }
