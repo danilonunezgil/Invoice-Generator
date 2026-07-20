@@ -71,11 +71,20 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          set +e
           cat review-prompt.md | claude -p \
             --output-format json \
             --json-schema "$(cat .github/claude-review-schema.json)" \
             --allowedTools "Read,Grep,Glob" \
-            > result.json
+            > result.json 2> claude-stderr.log
+          exit_code=$?
+
+          echo "--- stdout (result.json) ---"
+          cat result.json
+          echo "--- stderr ---"
+          cat claude-stderr.log
+
+          exit $exit_code
 
       - name: Filtrar solo bug y security
         if: steps.diff.outputs.has_changes == 'true'
