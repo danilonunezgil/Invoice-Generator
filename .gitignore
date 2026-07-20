@@ -13,11 +13,16 @@ docs/reference/*
 **/target/
 **/build/
 
+# Node.js (mcp-server/)
+**/node_modules/
+**/npm-debug.log*
+
 # Archivos de entorno
 .env
 .env.*
 **/.env
 **/.env.*
+!**/.env.example
 
 # Maven Wrapper
 .mvn/wrapper/maven-wrapper.jar
