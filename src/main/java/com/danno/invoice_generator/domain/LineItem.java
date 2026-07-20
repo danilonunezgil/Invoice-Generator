@@ -88,7 +88,7 @@ public class LineItem {
 
     @Transient
     public BigDecimal getTaxAmount() {
-        return getSubtotal().multiply(taxRate).setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
+        return getSubtotal().multiply(taxRate).setScale(AMOUNT_SCALE, RoundingMode.DOWN);
     }
 
     @Transient
