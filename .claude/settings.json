@@ -1,5 +1,19 @@
 {
   "permissions": {
+    "allow": [
+      "mcp__invoice-api__get_invoice",
+      "mcp__invoice-api__get_customer",
+      "mcp__postgres-invoice__query"
+    ],
+    "ask": [
+      "mcp__invoice-api__create_customer",
+      "mcp__invoice-api__create_invoice_draft",
+      "mcp__invoice-api__add_invoice_line_item",
+      "mcp__invoice-api__issue_invoice",
+      "mcp__invoice-api__pay_invoice",
+      "mcp__invoice-api__cancel_invoice",
+      "mcp__invoice-api__onboard_customer_and_invoice"
+    ],
     "deny": [
       "Bash(git push --force*)",
       "Bash(git push -f*)"

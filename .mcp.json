@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "invoice-api": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "mcp-server/dist/index.js"
+      ],
+      "env": {
+        "INVOICE_API_BASE_URL": "http://localhost:8080"
+      }
+    }
+  }
+}
