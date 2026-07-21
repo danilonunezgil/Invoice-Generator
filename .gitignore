@@ -17,6 +17,9 @@ docs/reference/*
 **/node_modules/
 **/npm-debug.log*
 
+# Estado runtime simulado (no es fuente, se regenera al correr las tools)
+mcp-server/data/
+
 # Archivos de entorno
 .env
 .env.*
