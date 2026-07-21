@@ -13,11 +13,12 @@ Servicio de facturación construido con Spring Boot 3.5.16 y Java 17. Expone una
 5. [Persistencia](#persistencia)
 6. [API REST](#api-rest)
 7. [Servidor MCP](#servidor-mcp)
-8. [Cómo correr el proyecto](#cómo-correr-el-proyecto)
-9. [Testing](#testing)
-10. [CI/CD: revisión automática de PRs con Claude Code](#cicd-revisión-automática-de-prs-con-claude-code)
-11. [Configuración de Claude Code en este repo](#configuración-de-claude-code-en-este-repo)
-12. [Guía de caso de uso completo](docs/guia-caso-de-uso.md)
+8. [Agente de aprobación de facturas: agentic loop manual](#agente-de-aprobación-de-facturas-agentic-loop-manual)
+9. [Cómo correr el proyecto](#cómo-correr-el-proyecto)
+10. [Testing](#testing)
+11. [CI/CD: revisión automática de PRs con Claude Code](#cicd-revisión-automática-de-prs-con-claude-code)
+12. [Configuración de Claude Code en este repo](#configuración-de-claude-code-en-este-repo)
+13. [Guía de caso de uso completo](docs/guia-caso-de-uso.md)
 
 ---
 
@@ -129,6 +130,8 @@ Base path: `/api/invoices`
 | `POST` | `/api/invoices/{id}/cancel` | Cancela la factura |
 | `GET` | `/api/invoices/{id}` | Consulta una factura |
 | `GET` | `/api/invoices/{id}/pdf` | Descarga el PDF (`application/pdf`) |
+| `GET` | `/api/invoices/overdue?customerId=` | Facturas `ISSUED` de un cliente con `dueDate` vencida |
+| `GET` | `/api/tax-rules/{regionCode}` | Tasa de IVA resuelta para una región (con el default 21% si no hay `TaxRule`) |
 
 ### Swagger UI
 
@@ -152,7 +155,10 @@ Con la app corriendo: **http://localhost:8080/swagger-ui.html** (spec crudo en `
 | `pay_invoice` | `POST /api/invoices/{id}/pay` | Marca como `PAID` |
 | `cancel_invoice` | `POST /api/invoices/{id}/cancel` | Cancela la factura |
 | `get_invoice` | `GET /api/invoices/{id}` | Consulta una factura completa |
-| `onboard_customer_and_invoice` | encadena los 4 anteriores | Alta + primera factura en una sola llamada — equivalente tipado de la skill `onboard-customer-purchase` |
+| `list_overdue_invoices` | `GET /api/invoices/overdue?customerId=` | Facturas vencidas de un cliente (riesgo crediticio) |
+| `calculate_regional_tax` | `GET /api/tax-rules/{regionCode}` | Tasa de IVA para una región, sin necesidad de crear una factura |
+| `request_human_approval` | simulada (no hay endpoint real) | Escala una decisión a revisión humana — persiste un registro en `mcp-server/data/pending-approvals.json` |
+| `onboard_customer_and_invoice` | encadena los 4 primeros | Alta + primera factura en una sola llamada — equivalente tipado de la skill `onboard-customer-purchase` |
 
 ### Resources y prompt
 
@@ -178,6 +184,64 @@ Para debuggear un tool suelto sin pasar por Claude Code:
 ```bash
 npx @modelcontextprotocol/inspector node mcp-server/dist/index.js
 ```
+
+---
+
+## Agente de aprobación de facturas: agentic loop manual
+
+`agents/invoice-approval-agent/` es un agente standalone en TypeScript, separado de `mcp-server/` y de Claude Code, escrito para repasar en código real el **Domain 1** (Agentic Loop, Hooks, Coordinador/Subagentes) de la certificación **Claude Code Architect Foundations**. Llama directo a la API de Claude (`@anthropic-ai/sdk`) y actúa como su propio **host MCP**: abre un `Client` + `StdioClientTransport` contra `mcp-server/` en vez de reimplementar llamadas HTTP a la API de facturación. No usa ningún framework de agentes — el loop está escrito a mano para que la anatomía completa quede visible.
+
+### Anatomía del loop (`src/agenticLoopCore.ts`)
+
+```
+messages = [user: "Evaluá la factura {invoiceId}..."]
+loop:
+  response = anthropic.messages.create({ system, tools, messages })
+  messages.push({ role: "assistant", content: response.content })
+
+  switch response.stop_reason:
+    "tool_use"   -> ejecutar cada bloque tool_use, empaquetar TODOS los tool_result en un
+                    solo mensaje "user", volver a llamar
+    "end_turn"   -> devolver la decisión final (fin del loop)
+    "max_tokens" -> error explícito (respuesta truncada, no es una decisión completa)
+    otro         -> error explícito ("stop_reason inesperado")
+```
+
+Un `MAX_ITERATIONS` actúa como *circuit breaker* de última instancia — nunca como la lógica que decide cuándo parar; si se dispara, es un bug, no una decisión legítima. Esta misma función se reutiliza sin cambios para el agente simple, cada subagente y el coordinador (ver abajo): lo único que varía por rol es qué tools se ofrecen y cómo se ejecutan, nunca el manejo de `stop_reason`.
+
+**Anti-patrones que evita a propósito** (y por qué):
+
+1. Parsear el texto de la respuesta buscando palabras ("aprobado") en vez de inspeccionar `stop_reason`/bloques `tool_use` — frágil ante cambios de fraseo, sin garantía estructural.
+2. Tratar cualquier `stop_reason` distinto de `end_turn` como "terminado" — se saltean tool calls pendientes, se rompe el contrato del protocolo.
+3. Un límite arbitrario de iteraciones como *la* lógica de corte — puede cortar una secuencia legítima de varias tools, o enmascarar un loop infinito real en vez de exponerlo.
+4. No manejar `max_tokens` explícitamente — una respuesta truncada tratada como completa corrompe el parseo de la decisión final.
+
+### El hook: guard programático, no instrucción de prompt
+
+`src/guard.ts` bloquea la tool local `approve_invoice` (`src/tools/approveInvoice.ts`) **antes** de que produzca su efecto si el total de la factura supera `AUTO_APPROVAL_THRESHOLD_USD` (1000) — equivalente a un hook **PreToolUse**, no PostToolUse: bloquear *después* de aprobar ya sería tarde para una regla financiera. El modelo nunca decide si el bloqueo ocurre; `DISABLE_GUARD=true` lo desactiva sin tocar código, dejando solo la instrucción del prompt, para poder comparar empíricamente cuántas veces el modelo la respeta igual sin el guard. Justificación completa, incluida la comparación con el hook `PreToolUse` real que ya usa este mismo repo (`.claude/hooks/protect-applied-migrations.py`, ver [sección siguiente](#configuración-de-claude-code-en-este-repo)), en [`docs/adr/0001-guard-programatico-vs-instruccion-de-prompt-para-aprobacion-automatica.md`](docs/adr/0001-guard-programatico-vs-instruccion-de-prompt-para-aprobacion-automatica.md).
+
+### Coordinador + subagentes (`src/coordinator.ts`)
+
+Extiende el mismo loop a un patrón coordinador-subagente:
+
+- **Contexto explícito.** El coordinador resuelve `customerId`/`regionCode` una vez (vía `get_invoice`/`get_customer`) y se los pasa a cada subagente como input de su tool — el subagente `credit-checker` (`get_invoice` + `list_overdue_invoices`) y el subagente `tax-validator` (`get_invoice` + `calculate_regional_tax`) nunca heredan el historial completo de la conversación del coordinador, cada uno arranca su propia conversación aislada.
+- **Ejecución paralela real.** El system prompt del coordinador exige invocar `invoke_credit_checker` e `invoke_tax_validator` en el mismo turno (dos bloques `tool_use` en una sola respuesta); `dispatch.ts` los corre con `Promise.allSettled`, no secuencialmente, y loggea timestamps de inicio/fin de cada uno para poder verificar el solapamiento.
+- **Salida estructurada garantizada por la API, no por prompt.** Cada subagente cierra su investigación con una llamada forzada (`tool_choice: { type: "tool", name: "report_finding" }`, ver `src/subagents/reportFinding.ts`) — el resultado `{ finding, confidence, evidence }` queda garantizado por el tool-use forzado, no por instrucción.
+- **Fallos parciales explícitos.** `dispatch.ts` envuelve cada subagente en su propio timeout (`Promise.race` implícito vía `withTimeout`); si `credit-checker` no responde a tiempo (simulable con `SIMULATE_CREDIT_CHECKER_TIMEOUT_MS`), el coordinador recibe `{ failure_type: "timeout", partial_results: null }` como `tool_result` de error y su system prompt le exige seguir con el hallazgo de `tax-validator`, anotando el gap de cobertura en la síntesis final en vez de ignorarlo.
+
+### Cómo correr
+
+```bash
+cd agents/invoice-approval-agent
+npm install && npm run build
+cp .env.example .env   # completar ANTHROPIC_API_KEY
+
+node dist/index.js <invoiceId>          # Fase E: agente simple con guard
+npm run demo:no-hook -- <invoiceId>     # comparación empírica: solo prompt, sin guard
+node dist/coordinator.js <invoiceId>    # Fase F: coordinador + subagentes en paralelo
+```
+
+Ver `agents/invoice-approval-agent/README.md` para el detalle de cada script.
 
 ---
 
@@ -270,6 +334,24 @@ Ver la sección [Servidor MCP](#servidor-mcp) para el detalle de tools/resources
 - **Permisos por tool, no por servidor.** `.claude/settings.json` distingue tools de solo lectura (`get_invoice`, `get_customer`, el `query` de Postgres → `allow`) de tools que mutan estado (`create_*`, `issue_invoice`, `pay_invoice`, `cancel_invoice` → `ask`, piden confirmación humana en cada llamada). Es el mismo principio de *least privilege* que `--allowedTools "Read,Grep,Glob"` en `claude-review.yml` (sección anterior), aplicado en otra capa: ahí acota qué herramientas puede usar la CLI en CI sin supervisión; acá acota qué *tool calls* de MCP requieren aprobación humana en una sesión interactiva.
 - **Aprobación de servidores de proyecto.** A diferencia de `CLAUDE.md` o las reglas (que se cargan sin pedir nada), un `.mcp.json` nuevo requiere aprobación explícita la primera vez que se abre el repo — un gate de seguridad para que un servidor de proyecto no se ejecute sin que un humano lo revise primero.
 
+### 5. Hooks — guard programático real de Claude Code
+
+`.claude/settings.json` registra dos hooks `PreToolUse`, cada uno un script Python en `.claude/hooks/`:
+
+- `protect-applied-migrations.py` (`matcher: "Edit|Write"`) — bloquea editar un archivo de migración Flyway (`src/main/resources/db/migration/*.sql`) si ya está commiteado en git (`git ls-files --error-unmatch`). Flyway no permite modificar una migración ya aplicada; el hook lo hace cumplir *antes* de que la edición ocurra, devolviendo `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", ...}}` por stdout — el propio harness de Claude Code lee ese JSON y cancela la tool call.
+- `protect-confidential-reference.py` (`matcher: "Bash"`) — protege el material confidencial de `docs/reference/` (ver `.claude/rules/claude-code-architect-guide.md`) de comandos Bash que intenten leerlo o copiarlo fuera del árbol de trabajo.
+
+Esto es la misma idea que el guard de `agents/invoice-approval-agent/src/guard.ts` (ver [sección anterior](#agente-de-aprobación-de-facturas-agentic-loop-manual)), aplicada en dos lugares distintos:
+
+| | Hook de Claude Code | Guard del agente standalone |
+|---|---|---|
+| Dónde vive | `.claude/hooks/*.py`, registrado en `settings.json` | Código propio del agente (`guard.ts`) |
+| Quién lo ejecuta | El harness de Claude Code, antes de correr la tool | El *executor* de la tool local, antes de producir su efecto |
+| Formato de bloqueo | JSON por stdout (`permissionDecision: "deny"`) | Excepción tipada (`GuardBlockedError`) capturada por el loop |
+| Por qué existe | Reforzar una regla determinista sin depender de que el modelo la recuerde | Igual — ver [ADR 0001](docs/adr/0001-guard-programatico-vs-instruccion-de-prompt-para-aprobacion-automatica.md) |
+
+Ambos son la misma respuesta a la misma pregunta del examen: "¿instrucción de prompt o guard programático?" — la diferencia es únicamente si el agente corre dentro de Claude Code (hook nativo) o fuera (guard propio, porque el motor de hooks de Claude Code no aplica a un host escrito a mano).
+
 ### Resumen de mecanismos
 
 | Mecanismo | Se activa | Alcance | Parametrizable |
@@ -278,3 +360,4 @@ Ver la sección [Servidor MCP](#servidor-mcp) para el detalle de tools/resources
 | `rules/*.md` | Cuando el path activo hace match con el glob | Scoped por archivo/carpeta | No (pero sí condicional) |
 | `commands/*.md` | Invocación explícita (`/nombre-comando`) | Bajo demanda | Sí, vía `$ARGUMENTS` |
 | `.mcp.json` / MCP servers | Al conectar la sesión (previa aprobación si es scope project) | Tools/resources/prompts descubribles por el agente | Sí, vía el input schema de cada tool |
+| `hooks` (`PreToolUse`) | Antes de cada tool call que matchea el `matcher` | Determinista, corre siempre que matchea (no depende del modelo) | Sí, vía el JSON que recibe por stdin (`tool_input`) |
