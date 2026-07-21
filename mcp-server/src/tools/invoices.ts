@@ -159,6 +159,28 @@ export function registerInvoiceTools(server: McpServer) {
   );
 
   server.registerTool(
+    "list_overdue_invoices",
+    {
+      title: "Listar facturas vencidas de un cliente",
+      description:
+        "Lista las facturas ISSUED de un cliente cuya dueDate ya pasó (GET /api/invoices/overdue?customerId=...). " +
+        "Facturas DRAFT, PAID o CANCELLED nunca aparecen, aunque su dueDate haya pasado. " +
+        "Útil para evaluar riesgo crediticio antes de aprobar una factura nueva del mismo cliente.",
+      inputSchema: {
+        customerId: z.string().uuid(),
+      },
+    },
+    async ({ customerId }) => {
+      try {
+        const overdue = await get<InvoiceResponse[]>(`/api/invoices/overdue?customerId=${customerId}`);
+        return { content: [{ type: "text" as const, text: JSON.stringify(overdue) }] };
+      } catch (error) {
+        return toToolErrorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "onboard_customer_and_invoice",
     {
       title: "Alta de cliente + primera factura (agregado)",

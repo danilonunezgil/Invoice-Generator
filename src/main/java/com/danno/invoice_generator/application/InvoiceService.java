@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -82,6 +83,11 @@ public class InvoiceService {
     @Transactional(readOnly = true)
     public Invoice findById(UUID invoiceId) {
         return getInvoiceOrThrow(invoiceId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Invoice> findOverdueForCustomer(UUID customerId) {
+        return invoiceRepository.findOverdueByCustomer(customerId, LocalDate.now());
     }
 
     @Transactional(readOnly = true)

@@ -189,6 +189,51 @@ class InvoiceServiceIT extends PostgresIntegrationTest {
         assertThat(new String(pdf, 0, 4)).isEqualTo("%PDF");
     }
 
+    @Test
+    void given_customerWithIssuedInvoicePastDueDate_when_findOverdue_then_returnsIt() {
+        Customer customer = persistCustomer("ES");
+        Invoice invoice = invoiceService.createDraft(customer.getId(), LocalDate.now().minusDays(5));
+        invoiceService.addLineItem(invoice.getId(), "Consulting", BigDecimal.ONE, new BigDecimal("100.00"));
+        invoiceService.issueInvoice(invoice.getId());
+
+        var overdue = invoiceService.findOverdueForCustomer(customer.getId());
+
+        assertThat(overdue).extracting(Invoice::getId).containsExactly(invoice.getId());
+    }
+
+    @Test
+    void given_draftOrPaidOrCancelledInvoicePastDueDate_when_findOverdue_then_excludesThem() {
+        Customer customer = persistCustomer("ES");
+
+        Invoice draft = invoiceService.createDraft(customer.getId(), LocalDate.now().minusDays(5));
+
+        Invoice paid = invoiceService.createDraft(customer.getId(), LocalDate.now().minusDays(5));
+        invoiceService.addLineItem(paid.getId(), "Consulting", BigDecimal.ONE, new BigDecimal("100.00"));
+        invoiceService.issueInvoice(paid.getId());
+        invoiceService.markAsPaid(paid.getId());
+
+        Invoice cancelled = invoiceService.createDraft(customer.getId(), LocalDate.now().minusDays(5));
+        invoiceService.cancelInvoice(cancelled.getId());
+
+        var overdue = invoiceService.findOverdueForCustomer(customer.getId());
+
+        assertThat(overdue).isEmpty();
+        assertThat(draft.getStatus()).isEqualTo(InvoiceStatus.DRAFT);
+    }
+
+    @Test
+    void given_overdueInvoiceOfAnotherCustomer_when_findOverdue_then_excludesIt() {
+        Customer customer = persistCustomer("ES");
+        Customer otherCustomer = persistCustomer("AR");
+        Invoice otherInvoice = invoiceService.createDraft(otherCustomer.getId(), LocalDate.now().minusDays(5));
+        invoiceService.addLineItem(otherInvoice.getId(), "Consulting", BigDecimal.ONE, new BigDecimal("100.00"));
+        invoiceService.issueInvoice(otherInvoice.getId());
+
+        var overdue = invoiceService.findOverdueForCustomer(customer.getId());
+
+        assertThat(overdue).isEmpty();
+    }
+
     private Customer persistCustomer(String regionCode) {
         Customer customer = new Customer("Acme", "TAX-1", "billing@acme.test", regionCode,
                 new Address("Main St 1", "City", "00000", "Country"));

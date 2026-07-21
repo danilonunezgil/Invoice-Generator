@@ -7,6 +7,8 @@ import com.danno.invoice_generator.domain.exception.DuplicateInvoiceNumberExcept
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,5 +44,10 @@ class JpaInvoiceRepositoryAdapter implements InvoiceRepository {
                 .collect(Collectors.toMap(
                         InvoiceJpaRepository.StatusCountProjection::getStatus,
                         InvoiceJpaRepository.StatusCountProjection::getTotal));
+    }
+
+    @Override
+    public List<Invoice> findOverdueByCustomer(UUID customerId, LocalDate asOf) {
+        return jpaRepository.findByCustomer_IdAndStatusAndDueDateBefore(customerId, InvoiceStatus.ISSUED, asOf);
     }
 }
