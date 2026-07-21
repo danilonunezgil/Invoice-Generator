@@ -172,9 +172,33 @@ class InvoiceServiceIT extends PostgresIntegrationTest {
                 .isInstanceOf(InvalidInvoiceStateException.class);
     }
 
+    @Test
+    void given_issuedInvoiceForCustomerWithoutAddress_when_generatePdf_then_returnsPdfBytes() {
+        // Hibernate deserializa un @Embedded Address como null cuando todas sus columnas
+        // son null, en vez de un Address con campos null.
+        Customer customer = persistCustomerWithoutAddress("ES");
+        Invoice invoice = invoiceService.createDraft(customer.getId(), LocalDate.now().plusDays(30));
+        invoiceService.addLineItem(invoice.getId(), "Consulting", BigDecimal.ONE, new BigDecimal("100.00"));
+        invoiceService.issueInvoice(invoice.getId());
+        entityManager.flush();
+        entityManager.clear();
+
+        byte[] pdf = invoiceService.generatePdf(invoice.getId());
+
+        assertThat(pdf).isNotEmpty();
+        assertThat(new String(pdf, 0, 4)).isEqualTo("%PDF");
+    }
+
     private Customer persistCustomer(String regionCode) {
         Customer customer = new Customer("Acme", "TAX-1", "billing@acme.test", regionCode,
                 new Address("Main St 1", "City", "00000", "Country"));
+        entityManager.persist(customer);
+        return customer;
+    }
+
+    private Customer persistCustomerWithoutAddress(String regionCode) {
+        Customer customer = new Customer("Acme", "TAX-1", "billing@acme.test", regionCode,
+                new Address(null, null, null, null));
         entityManager.persist(customer);
         return customer;
     }

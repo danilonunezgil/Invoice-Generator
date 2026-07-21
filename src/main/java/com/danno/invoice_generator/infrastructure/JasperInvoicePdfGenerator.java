@@ -59,6 +59,9 @@ public class JasperInvoicePdfGenerator implements InvoicePdfGenerator {
     }
 
     private String formatAddress(Address address) {
+        if (address == null) {
+            return "";
+        }
         return "%s, %s %s, %s".formatted(
                 address.getStreet(), address.getCity(), address.getPostalCode(), address.getCountry());
     }
