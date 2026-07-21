@@ -12,11 +12,12 @@ Servicio de facturación construido con Spring Boot 3.5.16 y Java 17. Expone una
 4. [Modelo de dominio y reglas de negocio](#modelo-de-dominio-y-reglas-de-negocio)
 5. [Persistencia](#persistencia)
 6. [API REST](#api-rest)
-7. [Cómo correr el proyecto](#cómo-correr-el-proyecto)
-8. [Testing](#testing)
-9. [CI/CD: revisión automática de PRs con Claude Code](#cicd-revisión-automática-de-prs-con-claude-code)
-10. [Configuración de Claude Code en este repo](#configuración-de-claude-code-en-este-repo)
-11. [Guía de caso de uso completo](docs/guia-caso-de-uso.md)
+7. [Servidor MCP](#servidor-mcp)
+8. [Cómo correr el proyecto](#cómo-correr-el-proyecto)
+9. [Testing](#testing)
+10. [CI/CD: revisión automática de PRs con Claude Code](#cicd-revisión-automática-de-prs-con-claude-code)
+11. [Configuración de Claude Code en este repo](#configuración-de-claude-code-en-este-repo)
+12. [Guía de caso de uso completo](docs/guia-caso-de-uso.md)
 
 ---
 
@@ -135,6 +136,51 @@ Con la app corriendo: **http://localhost:8080/swagger-ui.html** (spec crudo en `
 
 ---
 
+## Servidor MCP
+
+`mcp-server/` es un servidor **MCP (Model Context Protocol)** en TypeScript que expone esta misma API REST como *tools*, *resources* y un *prompt* para cualquier cliente MCP (Claude Code, Claude Desktop, etc.), en vez de requerir que el agente arme requests HTTP a mano. No sustituye a la API — es una capa de integración sobre ella.
+
+### Tools (mapeados 1:1 a los endpoints REST)
+
+| Tool | Endpoint | Descripción |
+|---|---|---|
+| `create_customer` | `POST /api/customers` | Da de alta un cliente |
+| `get_customer` | `GET /api/customers/{id}` | Consulta un cliente |
+| `create_invoice_draft` | `POST /api/invoices` | Crea una factura en `DRAFT` |
+| `add_invoice_line_item` | `POST /api/invoices/{id}/line-items` | Agrega una línea |
+| `issue_invoice` | `POST /api/invoices/{id}/issue` | Emite la factura |
+| `pay_invoice` | `POST /api/invoices/{id}/pay` | Marca como `PAID` |
+| `cancel_invoice` | `POST /api/invoices/{id}/cancel` | Cancela la factura |
+| `get_invoice` | `GET /api/invoices/{id}` | Consulta una factura completa |
+| `onboard_customer_and_invoice` | encadena los 4 anteriores | Alta + primera factura en una sola llamada — equivalente tipado de la skill `onboard-customer-purchase` |
+
+### Resources y prompt
+
+- `invoice://{invoiceId}/pdf` y `report://billing-summary/pdf` — exponen los PDFs como contenido direccionable por URI (`GET /api/invoices/{id}/pdf` y `GET /api/reports/billing-summary/pdf` por detrás).
+- `draft-invoice-for-customer` — prompt que guía el flujo alta-de-cliente + primera factura, invocando los tools en el orden correcto.
+
+### Manejo de errores
+
+Cada tool traduce el `ProblemDetail` (RFC 7807) de la API en un resultado MCP con `isError: true` más metadata estructurada: `errorCategory` (`validation` | `not_found` | `business` | `transient`) e `isRetryable`. Así el agente distingue, por ejemplo, un 409 por violar una regla de negocio (no reintentable) de un fallo de red (sí reintentable) — ver `mcp-server/src/errors.ts`.
+
+### Cómo correr y registrar
+
+```bash
+cd mcp-server
+npm install
+npm run build                 # compila a dist/
+```
+
+Ya está registrado en `.mcp.json` (raíz del repo, scope `project`, versionado — sin secretos porque la API no tiene auth todavía). La primera vez que abrís el repo con Claude Code, hay que aprobarlo (`claude mcp list` lo muestra como "⏸ Pending approval" hasta que corras `claude` interactivamente y lo apruebes).
+
+Para debuggear un tool suelto sin pasar por Claude Code:
+
+```bash
+npx @modelcontextprotocol/inspector node mcp-server/dist/index.js
+```
+
+---
+
 ## Cómo correr el proyecto
 
 ```bash
@@ -215,6 +261,15 @@ Esto es lo que en la arquitectura de Claude Code se conoce como **contexto scope
 
 Esto ejemplifica cómo los slash commands funcionan como **prompts parametrizados y reutilizables**, distintos de las reglas (que son pasivas/contextuales) y de `CLAUDE.md` (que es siempre-activo y no parametrizado).
 
+### 4. MCP — servidor personalizado + servidor existente
+
+Ver la sección [Servidor MCP](#servidor-mcp) para el detalle de tools/resources/prompt. Acá lo relevante es cómo encaja en la configuración de Claude Code:
+
+- **Dos servidores, dos scopes.** `invoice-api` (el servidor personalizado de este repo) vive en `.mcp.json` en scope **project** — versionado, sin secretos, compartido con todo el equipo. `postgres-invoice` (el servidor MCP oficial de Postgres, apuntando a la base de este proyecto) se registró en scope **local** (`claude mcp add --scope local`) porque su connection string lleva usuario/contraseña — scope local no se versiona.
+- **Conectar un MCP existente vs. construir uno propio.** `postgres-invoice` es un servidor de la comunidad (`@modelcontextprotocol/server-postgres`) reutilizado tal cual — expone un único tool `query`, de **solo lectura por diseño** (un `DELETE` falla a nivel de transacción de Postgres, no solo por permisos de Claude Code). `invoice-api` se construyó a medida porque envuelve reglas de negocio específicas de este dominio (numeración fiscal, transiciones de estado) que ningún servidor genérico expone.
+- **Permisos por tool, no por servidor.** `.claude/settings.json` distingue tools de solo lectura (`get_invoice`, `get_customer`, el `query` de Postgres → `allow`) de tools que mutan estado (`create_*`, `issue_invoice`, `pay_invoice`, `cancel_invoice` → `ask`, piden confirmación humana en cada llamada). Es el mismo principio de *least privilege* que `--allowedTools "Read,Grep,Glob"` en `claude-review.yml` (sección anterior), aplicado en otra capa: ahí acota qué herramientas puede usar la CLI en CI sin supervisión; acá acota qué *tool calls* de MCP requieren aprobación humana en una sesión interactiva.
+- **Aprobación de servidores de proyecto.** A diferencia de `CLAUDE.md` o las reglas (que se cargan sin pedir nada), un `.mcp.json` nuevo requiere aprobación explícita la primera vez que se abre el repo — un gate de seguridad para que un servidor de proyecto no se ejecute sin que un humano lo revise primero.
+
 ### Resumen de mecanismos
 
 | Mecanismo | Se activa | Alcance | Parametrizable |
@@ -222,3 +277,4 @@ Esto ejemplifica cómo los slash commands funcionan como **prompts parametrizado
 | `CLAUDE.md` | Siempre | Todo el repo | No |
 | `rules/*.md` | Cuando el path activo hace match con el glob | Scoped por archivo/carpeta | No (pero sí condicional) |
 | `commands/*.md` | Invocación explícita (`/nombre-comando`) | Bajo demanda | Sí, vía `$ARGUMENTS` |
+| `.mcp.json` / MCP servers | Al conectar la sesión (previa aprobación si es scope project) | Tools/resources/prompts descubribles por el agente | Sí, vía el input schema de cada tool |
