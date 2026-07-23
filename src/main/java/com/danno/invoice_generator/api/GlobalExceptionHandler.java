@@ -5,8 +5,10 @@ import com.danno.invoice_generator.domain.exception.DomainException;
 import com.danno.invoice_generator.domain.exception.DuplicateInvoiceNumberException;
 import com.danno.invoice_generator.domain.exception.InvalidInvoiceNumberException;
 import com.danno.invoice_generator.domain.exception.InvalidInvoiceStateException;
+import com.danno.invoice_generator.domain.exception.InvalidPdfUploadException;
 import com.danno.invoice_generator.domain.exception.InvoiceNotFoundException;
 import com.danno.invoice_generator.domain.exception.InvoiceNotModifiableException;
+import com.danno.invoice_generator.domain.exception.InvoicePdfExtractionException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -31,9 +33,14 @@ class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
     }
 
-    @ExceptionHandler(InvalidInvoiceNumberException.class)
+    @ExceptionHandler({InvalidInvoiceNumberException.class, InvalidPdfUploadException.class})
     ProblemDetail handleBadRequest(DomainException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvoicePdfExtractionException.class)
+    ProblemDetail handleExtractionFailure(DomainException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

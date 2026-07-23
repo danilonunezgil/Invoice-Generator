@@ -69,8 +69,22 @@
         </dependency>
 
         <dependency>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>2.50.0</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- Solo para generar PDFs sintéticos reproducibles en los tests de verificación
+                 de la extracción; no se usa en producción (Claude lee el PDF directamente). -->
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.8</version>
             <scope>test</scope>
         </dependency>
         <dependency>

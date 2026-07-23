@@ -2,6 +2,7 @@ package com.danno.invoice_generator.application;
 
 import com.danno.invoice_generator.application.port.CustomerRepository;
 import com.danno.invoice_generator.application.port.InvoiceNumberGenerator;
+import com.danno.invoice_generator.application.port.InvoicePdfExtractor;
 import com.danno.invoice_generator.application.port.InvoicePdfGenerator;
 import com.danno.invoice_generator.application.port.InvoiceRepository;
 import com.danno.invoice_generator.application.port.TaxRuleRepository;
@@ -29,17 +30,20 @@ public class InvoiceService {
     private final TaxRuleRepository taxRuleRepository;
     private final InvoiceNumberGenerator invoiceNumberGenerator;
     private final InvoicePdfGenerator invoicePdfGenerator;
+    private final InvoicePdfExtractor invoicePdfExtractor;
 
     public InvoiceService(InvoiceRepository invoiceRepository,
                            CustomerRepository customerRepository,
                            TaxRuleRepository taxRuleRepository,
                            InvoiceNumberGenerator invoiceNumberGenerator,
-                           InvoicePdfGenerator invoicePdfGenerator) {
+                           InvoicePdfGenerator invoicePdfGenerator,
+                           InvoicePdfExtractor invoicePdfExtractor) {
         this.invoiceRepository = invoiceRepository;
         this.customerRepository = customerRepository;
         this.taxRuleRepository = taxRuleRepository;
         this.invoiceNumberGenerator = invoiceNumberGenerator;
         this.invoicePdfGenerator = invoicePdfGenerator;
+        this.invoicePdfExtractor = invoicePdfExtractor;
     }
 
     @Transactional
@@ -97,6 +101,15 @@ public class InvoiceService {
             throw new InvalidInvoiceStateException(invoiceId, invoice.getStatus(), "generatePdf");
         }
         return invoicePdfGenerator.generate(invoice);
+    }
+
+    // Sin @Transactional: esta operación no toca invoiceRepository ni ninguna otra tabla —
+    // abrir una transacción/conexión JPA solo para mantenerla ociosa durante la llamada
+    // (potencialmente lenta) a la API externa de Claude sería contraproducente.
+    // invoiceId no se usa funcionalmente (endpoint stateless, decisión confirmada) — se
+    // conserva en la firma solo para trazabilidad/logging futura.
+    public ExtractedInvoiceData extractFromPdf(UUID invoiceId, byte[] pdfBytes) {
+        return invoicePdfExtractor.extract(pdfBytes);
     }
 
     private Invoice getInvoiceOrThrow(UUID invoiceId) {

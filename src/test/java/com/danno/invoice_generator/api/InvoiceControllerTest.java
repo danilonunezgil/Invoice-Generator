@@ -2,6 +2,9 @@ package com.danno.invoice_generator.api;
 
 import com.danno.invoice_generator.api.dto.AddLineItemRequest;
 import com.danno.invoice_generator.api.dto.CreateInvoiceRequest;
+import com.danno.invoice_generator.application.ExtractedInvoiceData;
+import com.danno.invoice_generator.application.ExtractedLineItem;
+import com.danno.invoice_generator.application.ExtractedLineItemCategory;
 import com.danno.invoice_generator.application.InvoiceService;
 import com.danno.invoice_generator.domain.Address;
 import com.danno.invoice_generator.domain.Customer;
@@ -11,21 +14,25 @@ import com.danno.invoice_generator.domain.exception.CustomerNotFoundException;
 import com.danno.invoice_generator.domain.exception.InvalidInvoiceStateException;
 import com.danno.invoice_generator.domain.exception.InvoiceNotFoundException;
 import com.danno.invoice_generator.domain.exception.InvoiceNotModifiableException;
+import com.danno.invoice_generator.domain.exception.InvoicePdfExtractionException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -128,6 +135,52 @@ class InvoiceControllerTest {
         mockMvc.perform(get("/api/invoices/{id}", UUID.randomUUID()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("DRAFT"));
+    }
+
+    @Test
+    void given_validPdf_when_extractFromPdf_then_returns200WithExtractedData() throws Exception {
+        UUID invoiceId = UUID.randomUUID();
+        ExtractedInvoiceData data = new ExtractedInvoiceData(
+                "Acme Supplies", LocalDate.of(2026, 3, 14),
+                List.of(new ExtractedLineItem("Papel A4", BigDecimal.valueOf(3), new BigDecimal("18.50"),
+                        ExtractedLineItemCategory.GOODS, null)),
+                new BigDecimal("55.50"), true, 0);
+        given(invoiceService.extractFromPdf(eq(invoiceId), any())).willReturn(data);
+        MockMultipartFile file = new MockMultipartFile("file", "invoice.pdf", "application/pdf", "dummy".getBytes());
+
+        mockMvc.perform(multipart("/api/invoices/{id}/extract-from-pdf", invoiceId).file(file))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalsReconciled").value(true))
+                .andExpect(jsonPath("$.vendorName").value("Acme Supplies"));
+    }
+
+    @Test
+    void given_nonPdfContentType_when_extractFromPdf_then_returns400() throws Exception {
+        UUID invoiceId = UUID.randomUUID();
+        MockMultipartFile file = new MockMultipartFile("file", "invoice.txt", "text/plain", "dummy".getBytes());
+
+        mockMvc.perform(multipart("/api/invoices/{id}/extract-from-pdf", invoiceId).file(file))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void given_emptyFile_when_extractFromPdf_then_returns400() throws Exception {
+        UUID invoiceId = UUID.randomUUID();
+        MockMultipartFile file = new MockMultipartFile("file", "invoice.pdf", "application/pdf", new byte[0]);
+
+        mockMvc.perform(multipart("/api/invoices/{id}/extract-from-pdf", invoiceId).file(file))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void given_extractionServiceFailure_when_extractFromPdf_then_returns502() throws Exception {
+        UUID invoiceId = UUID.randomUUID();
+        given(invoiceService.extractFromPdf(eq(invoiceId), any()))
+                .willThrow(new InvoicePdfExtractionException("Claude rechazó la solicitud"));
+        MockMultipartFile file = new MockMultipartFile("file", "invoice.pdf", "application/pdf", "dummy".getBytes());
+
+        mockMvc.perform(multipart("/api/invoices/{id}/extract-from-pdf", invoiceId).file(file))
+                .andExpect(status().isBadGateway());
     }
 
     private static Invoice newDraftInvoice() {
